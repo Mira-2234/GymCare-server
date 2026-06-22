@@ -171,7 +171,7 @@ async function run() {
       }
     });
 
-    // ── POST /forum-posts  —  Public/general post create (Imgbb URL string body) ──
+    // forum-posts 
     app.post("/forum-posts", async (req, res) => {
       try {
         const { title, image, description, authorName, authorEmail, authorRole } = req.body;
