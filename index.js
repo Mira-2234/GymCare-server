@@ -493,7 +493,7 @@ async function run() {
       {
         $unwind: {
           path: "$classDetails",
-          preserveNullAndEmptyArrays: true // ক্লাস ডিলিট হয়ে গেলেও বুকিং ডেটা দেখাবে
+          preserveNullAndEmptyArrays: true 
         }
       },
       {
@@ -527,9 +527,7 @@ async function run() {
   }
 });
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // FAVORITES ROUTES
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   
     app.get("/favorites/check", async (req, res) => {
       try {
         const { classId, userEmail } = req.query;
@@ -595,14 +593,11 @@ async function run() {
       }
     });
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // USER DASHBOARD STATS — 🔴 JWT protected
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ━━ AFTER — fix kora version ━━
+   
 
 app.get("/dashboard/user-stats", async (req, res) => {
   try {
-    const { userEmail } = req.query; // query param theke nao
+    const { userEmail } = req.query; 
     if (!userEmail) return res.status(400).send({ error: "userEmail required" });
 
     const [bookedCount, favoritesCount] = await Promise.all([
