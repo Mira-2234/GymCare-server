@@ -949,9 +949,7 @@ app.patch("/notifications/read-all", async (req, res) => {
       }
     });
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ADMIN — USERS
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  
     app.get("/api/admin/users", verifyAdmin, async (req, res) => {
       try {
         const users = await usersCollection.find().sort({ createdAt: -1 }).toArray();
@@ -1004,9 +1002,8 @@ app.patch("/notifications/read-all", async (req, res) => {
       }
     });
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ADMIN — MANAGE TRAINERS
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  
+   
     app.get("/api/admin/trainers", verifyAdmin, async (req, res) => {
       try {
         const trainers = await usersCollection
@@ -1021,9 +1018,7 @@ app.patch("/notifications/read-all", async (req, res) => {
       }
     });
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ADMIN — CLASSES
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
     app.get("/api/admin/classes", verifyAdmin, async (req, res) => {
       try {
         const status = req.query.status;
@@ -1094,7 +1089,7 @@ app.patch("/notifications/read-all", async (req, res) => {
 
     if (!ObjectId.isValid(id)) return res.status(400).send({ error: "Invalid application ID" });
 
-    // Age application fetch koro — notification e userEmail lagbe
+    
     const application = await trainerApplicationsCollection.findOne({
       _id: new ObjectId(id),
     });
@@ -1164,9 +1159,7 @@ app.patch("/notifications/read-all", async (req, res) => {
       }
     });
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ADMIN — FORUM MODERATION
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
     app.get("/api/admin/forum-posts", verifyAdmin, async (req, res) => {
       try {
         const posts = await forumPostsCollection.find().sort({ createdAt: -1 }).toArray();
@@ -1191,9 +1184,6 @@ app.patch("/notifications/read-all", async (req, res) => {
       }
     });
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ADMIN — TRANSACTIONS
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     app.get("/api/admin/transactions", verifyAdmin, async (req, res) => {
       try {
         const page = parseInt(req.query.page) || 1;
@@ -1223,9 +1213,7 @@ app.patch("/notifications/read-all", async (req, res) => {
       }
     });
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // TRAINER ROUTES — 🔴 JWT + role protected
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
     app.get("/trainer/stats", verifyToken, verifyRole("trainer"), async (req, res) => {
       try {
         const trainerEmail = req.decoded.email; // 🔴 token থেকে নেওয়া
