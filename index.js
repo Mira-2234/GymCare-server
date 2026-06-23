@@ -5,6 +5,7 @@ require("dotenv").config();
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const Stripe = require("stripe");
+const jwt = require("jsonwebtoken"); // 🔴 JWT লাইব্রেরি
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -68,6 +69,81 @@ async function run() {
       const user = await usersCollection.findOne({ email });
       return user?.status === "Blocked";
     };
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 🔴 JWT AUTH HELPERS
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    // verifyToken — HTTPOnly cookie থেকে JWT পড়ে ভেরিফাই করে
+    const verifyToken = (req, res, next) => {
+      const token = req.cookies?.token;
+
+      if (!token) {
+        return res.status(401).send({ error: "Unauthorized: No token provided." });
+      }
+
+      jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) {
+          return res.status(401).send({ error: "Unauthorized: Invalid or expired token." });
+        }
+        req.decoded = decoded; // { email, role }
+        next();
+      });
+    };
+
+    // verifyRole — role-based access, verifyToken এর পরে ব্যবহার করতে হবে
+    const verifyRole = (...allowedRoles) => {
+      return (req, res, next) => {
+        if (!req.decoded || !allowedRoles.includes(req.decoded.role)) {
+          return res.status(403).send({ error: "Forbidden: Insufficient permissions." });
+        }
+        next();
+      };
+    };
+
+    // POST /jwt — Better-auth login সফল হওয়ার পর frontend এটা call করবে
+    app.post("/jwt", async (req, res) => {
+      try {
+        const { email } = req.body;
+        if (!email) {
+          return res.status(400).send({ error: "Email is required." });
+        }
+
+        const user = await usersCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).send({ error: "User not found." });
+        }
+
+        const token = jwt.sign(
+          { email: user.email, role: user.role || "user" },
+          process.env.JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+
+        res
+          .cookie("token", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+          })
+          .send({ success: true });
+      } catch (error) {
+        console.error("POST /jwt error:", error);
+        res.status(500).send({ error: "Failed to generate token." });
+      }
+    });
+
+    // POST /logout — JWT cookie clear করে
+    app.post("/logout", (req, res) => {
+      res
+        .clearCookie("token", {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        })
+        .send({ success: true });
+    });
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // CLASS ROUTES
@@ -304,7 +380,6 @@ async function run() {
       }
     });
 
-    // ── Block check: blocked user comment dite parbe na ──
     app.post("/comments", async (req, res) => {
       try {
         const { postId, userEmail, userName, userImage, text } = req.body;
@@ -490,12 +565,11 @@ async function run() {
     });
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // USER DASHBOARD STATS
+    // USER DASHBOARD STATS — 🔴 JWT protected
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    app.get("/dashboard/user-stats", async (req, res) => {
+    app.get("/dashboard/user-stats", verifyToken, async (req, res) => {
       try {
-        const { userEmail } = req.query;
-        if (!userEmail) return res.status(400).send({ error: "userEmail required" });
+        const userEmail = req.decoded.email; // 🔴 query param এর বদলে token থেকে
 
         const [bookedCount, favoritesCount] = await Promise.all([
           bookingsCollection.countDocuments({ attendeeEmail: userEmail }),
@@ -514,21 +588,36 @@ async function run() {
     app.get("/trainer-applications/my", async (req, res) => {
       try {
         const { userEmail } = req.query;
-        if (!userEmail) return res.status(400).send({ error: "userEmail required" });
 
-        const application = await trainerApplicationsCollection
-          .find({ userEmail })
-          .sort({ appliedAt: -1 })
-          .limit(1)
-          .toArray();
-        res.send({ application: application[0] || null });
+        if (!userEmail) {
+          return res.status(400).send({ success: false, message: "userEmail required" });
+        }
+
+        const application = await trainerApplicationsCollection.findOne({ userEmail });
+
+        if (!application) {
+          return res.send({ success: true, application: null });
+        }
+
+        res.send({
+          success: true,
+          application: {
+            _id: application._id,
+            userName: application.userName,
+            userEmail: application.userEmail,
+            specialty: application.specialty,
+            experience: application.experience,
+            status: application.status || "Pending",
+            feedback: application.feedback || "",
+            createdAt: application.createdAt,
+          },
+        });
       } catch (error) {
-        console.error("GET /trainer-applications/my error:", error);
-        res.status(500).send({ error: "Failed to fetch application status" });
+        console.log(error);
+        res.status(500).send({ success: false, message: "Failed to fetch application" });
       }
     });
 
-    // ── Block check: blocked user apply dite parbe na ──
     app.post("/trainer-applications", async (req, res) => {
       try {
         const { userEmail, userName, experience, specialty, bio } = req.body;
@@ -570,8 +659,6 @@ async function run() {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // PAYMENT / STRIPE ROUTES
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    // ── Block check: blocked user booking dite parbe na ──
     app.post("/create-checkout-session", async (req, res) => {
       try {
         const { classId, userEmail } = req.body;
@@ -687,9 +774,9 @@ async function run() {
     });
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ADMIN — STATS
+    // ADMIN — STATS — 🔴 JWT + role double protection
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    app.get("/api/admin/stats", verifyAdmin, async (req, res) => {
+    app.get("/api/admin/stats", verifyToken, verifyRole("admin"), verifyAdmin, async (req, res) => {
       try {
         const [totalUsers, totalClasses, totalApprovedClasses, totalBookedClasses] =
           await Promise.all([
@@ -781,6 +868,23 @@ async function run() {
       }
     });
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ADMIN — MANAGE TRAINERS
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    app.get("/api/admin/trainers", verifyAdmin, async (req, res) => {
+      try {
+        const trainers = await usersCollection
+          .find({ role: "trainer" })
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        res.send({ success: true, total: trainers.length, trainers });
+      } catch (error) {
+        console.error("GET /api/admin/trainers error:", error);
+        res.status(500).send({ success: false, error: "Failed to fetch trainers" });
+      }
+    });
+
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // ADMIN — CLASSES
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -831,7 +935,6 @@ async function run() {
       }
     });
 
-    
     app.get("/api/admin/trainer-applications", verifyAdmin, async (req, res) => {
       try {
         const status = req.query.status;
@@ -848,94 +951,41 @@ async function run() {
       }
     });
 
-   app.patch("/api/admin/trainer-applications/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
+    app.patch("/api/admin/trainer-applications/:id", verifyAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { status, feedback } = req.body;
 
-    const {
-      status,
-      feedback,
-    } = req.body;
+        const result = await trainerApplicationsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              status,
+              feedback: status === "Rejected" ? feedback : "",
+              updatedAt: new Date(),
+            },
+          }
+        );
 
-    const result =
-      await trainerApplicationsCollection.updateOne(
-        {
-          _id: new ObjectId(id),
-        },
-        {
-          $set: {
-            status,
-            feedback: status === "Rejected"
-              ? feedback
-              : "",
-
-            updatedAt: new Date(),
-          },
+        // 🔴 Approve হলে user role trainer তে আপডেট হওয়া উচিত — আগের version এ মিসিং ছিল
+        if (status === "Approved") {
+          const application = await trainerApplicationsCollection.findOne({
+            _id: new ObjectId(id),
+          });
+          if (application) {
+            await usersCollection.updateOne(
+              { email: application.userEmail },
+              { $set: { role: "trainer" } }
+            );
+          }
         }
-      );
 
-    res.send({
-      success: true,
-      modifiedCount: result.modifiedCount,
+        res.send({ success: true, modifiedCount: result.modifiedCount });
+      } catch (err) {
+        console.error("PATCH /api/admin/trainer-applications/:id error:", err);
+        res.status(500).send({ success: false });
+      }
     });
-  } catch (err) {
-    res.status(500).send({
-      success: false,
-    });
-  }
-});
-
-    
-    app.get("/trainer-applications/my", async (req, res) => {
-  try {
-    const { userEmail } = req.query;
-
-    if (!userEmail) {
-      return res.status(400).send({
-        success: false,
-        message: "userEmail required",
-      });
-    }
-
-    const application =
-      await trainerApplicationsCollection.findOne({
-        userEmail,
-      });
-
-    if (!application) {
-      return res.send({
-        success: true,
-        application: null,
-      });
-    }
-
-    res.send({
-      success: true,
-      application: {
-        _id: application._id,
-        userName: application.userName,
-        userEmail: application.userEmail,
-
-        specialty: application.specialty,
-        experience: application.experience,
-
-        status: application.status || "Pending",
-
-        // ← এটা add কর
-        feedback: application.feedback || "",
-
-        createdAt: application.createdAt,
-      },
-    });
-  } catch (error) {
-    console.log(error);
-
-    res.status(500).send({
-      success: false,
-      message: "Failed to fetch application",
-    });
-  }
-});
 
     app.patch("/api/admin/trainers/:id/demote", verifyAdmin, async (req, res) => {
       try {
@@ -1013,12 +1063,11 @@ async function run() {
     });
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // TRAINER ROUTES
+    // TRAINER ROUTES — 🔴 JWT + role protected
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    app.get("/trainer/stats", async (req, res) => {
+    app.get("/trainer/stats", verifyToken, verifyRole("trainer"), async (req, res) => {
       try {
-        const { trainerEmail } = req.query;
-        if (!trainerEmail) return res.status(400).send({ error: "trainerEmail required" });
+        const trainerEmail = req.decoded.email; // 🔴 token থেকে নেওয়া
 
         const myClasses = await classesCollection.find({ trainerEmail }).toArray();
         const classIds = myClasses.map((c) => c._id.toString());
