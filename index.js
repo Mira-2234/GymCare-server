@@ -612,7 +612,7 @@ app.get("/dashboard/user-stats", async (req, res) => {
 });
 
 app.get("/api/admin/stats", verifyAdmin, async (req, res) => {
-  // verifyToken, verifyRole remove — verifyAdmin e enough
+  
   try {
     const [totalUsers, totalClasses, totalApprovedClasses, totalBookedClasses] =
       await Promise.all([
@@ -650,7 +650,7 @@ app.get("/api/admin/stats", verifyAdmin, async (req, res) => {
 });
 
 app.get("/trainer/stats", async (req, res) => {
-  // verifyToken, verifyRole remove — query param use koro
+  
   try {
     const { trainerEmail } = req.query;
     if (!trainerEmail) return res.status(400).send({ error: "trainerEmail required" });
@@ -668,9 +668,7 @@ app.get("/trainer/stats", async (req, res) => {
     res.status(500).send({ error: "Failed to fetch trainer stats." });
   }
 });
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // TRAINER APPLICATIONS
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
     app.get("/trainer-applications/my", async (req, res) => {
       try {
         const { userEmail } = req.query;
@@ -742,9 +740,7 @@ app.get("/trainer/stats", async (req, res) => {
       }
     });
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PAYMENT / STRIPE ROUTES
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   
     app.post("/create-checkout-session", async (req, res) => {
       try {
         const { classId, userEmail } = req.body;
